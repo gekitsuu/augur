@@ -51,6 +51,12 @@ config_path = root_augur_dir + '/augur.config.json'
 with open(config_path, 'r') as f:
     config = json.load(f)
 
+
+def get_commit_task_analysis_group():
+    
+    pass
+
+
 #enable celery multithreading
 @celery.task
 def analyze_commits_in_parallel(queue, repo_id, repo_location, multithreaded):
@@ -64,8 +70,6 @@ def analyze_commits_in_parallel(queue, repo_id, repo_location, multithreaded):
             analyze_commit(cfg, repo_id, repo_location, analyzeCommit, multithreaded)
         except Exception as e:
             cfg.log_activity('Info', 'Subprocess ran into error when trying to anaylyze commit with error: %s' % e)
-
-
 
 
 # if platform.python_implementation() == 'PyPy':
@@ -247,16 +251,12 @@ def analysis(cfg, multithreaded, session=None, processes=6):
     cfg.log_activity('Info','Running analysis (complete)')
 
 
-
-
-
-@celery.task
 def facade_commits_model():
 
-    logger = get_task_logger(facade_commits_model.name)
+    #Make this logging better later TODO
+    logger = logging.getLogger()
     session = FacadeSession(logger)
-    # Figure out what we need to do
-    limited_run = session.limited_run
+    
     delete_marked_repos = session.delete_marked_repos
     pull_repos = session.pull_repos
     clone_repos = session.clone_repos
@@ -275,8 +275,9 @@ def facade_commits_model():
     create_xlsx_summary_files = session.create_xlsx_summary_files
     multithreaded = session.multithreaded
 
-    opts,args = getopt.getopt(sys.argv[1:],'hdpcuUaAmnfIrx')
-    for opt in opts:
+    """
+        opts,args = getopt.getopt(sys.argv[1:],'hdpcuUaAmnfIrx')
+        for opt in opts:
         if opt[0] == '-h':
             print("\nfacade-worker.py does everything by default except invalidating caches\n"
                     "and forcing updates, unless invoked with one of the following options.\n"
@@ -361,6 +362,7 @@ def facade_commits_model():
             limited_run = 1
             session.cfg.log_activity('Info','Option set: creating Excel summary files.')
 
+    """
     # Get the location of the directory where git repos are stored
     repo_base_directory = session.cfg.repo_base_directory
 
@@ -375,12 +377,25 @@ def facade_commits_model():
     if len(repo_base_directory) == 0:
         session.cfg.log_activity('Error','No base directory. It is unsafe to continue.')
         session.cfg.update_status('Failed: No base directory')
-        sys.exit(1)
+        raise FileNotFoundError
 
     # Begin working
 
+@celery.task
+def facade_sync_phase_one():
+
+    
+    session = FacadeSession(logger)
     start_time = time.time()
     session.cfg.log_activity('Quiet','Running facade-worker')
+
+    # Figure out what we need to do
+    limited_run = session.limited_run
+    delete_marked_repos = session.delete_marked_repos
+    clone_repos = session.clone_repos
+    check_updates = session.check_updates
+    force_updates = session.force_updates
+    run_analysis = session.run_analysis
 
     if not limited_run or (limited_run and delete_marked_repos):
         git_repo_cleanup(session.cfg)
@@ -400,13 +415,12 @@ def facade_commits_model():
     if force_analysis:
         force_repo_analysis(session.cfg)
 
-    
     #Give analysis the github interface so that it can make API calls
     if not limited_run or (limited_run and run_analysis):
         analysis(session.cfg, multithreaded, session=session)
     
-    ### end moved up
 
+def facade_sync_phase_two():
     if nuke_stored_affiliations:
         nuke_affiliations(session.cfg)
 
