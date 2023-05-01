@@ -39,7 +39,7 @@ setup(
         "SQLAlchemy==1.3.23",
         "itsdangerous==2.0.1",
         "Jinja2==3.0.2",
-        "Flask==2.0.2",
+        "Flask==2.3.2",
         "Flask-Cors==3.0.10",
         "Flask-Login==0.5.0",
         "Flask-WTF==1.0.0",
